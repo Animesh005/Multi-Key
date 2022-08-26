@@ -471,13 +471,13 @@ int main()
     // auto bk = &sk->cloud;
 
     static const int32_t k = 1;
-    static const double ks_stdev = 3.05e-10;// 2.44e-5; //standard deviation
-    static const double bk_stdev = 3.72e-14; // 3.29e-10; //standard deviation
-    static const double max_stdev = 0.0001; //max standard deviation for a 1/4 msg space
+    static const double ks_stdev = 3.05e-6;// 2.44e-5; //standard deviation
+    static const double bk_stdev = 3.72e-10; // 3.29e-10; //standard deviation
+    static const double max_stdev = 0.001; //max standard deviation for a 1/4 msg space
     static const int32_t n = 560; //500;            // LWE modulus
     static const int32_t n_extract = 1024;    // LWE extract modulus (used in bootstrapping)
     static const int32_t hLWE = 0;         // HW secret key LWE --> not used
-    static const double stdevLWE = 0.00001;      // LWE ciphertexts standard deviation
+    static const double stdevLWE = 0.001;      // LWE ciphertexts standard deviation
     static const int32_t Bksbit = 2;       // Base bit key switching
     static const int32_t dks = 8;          // dimension key switching
     static const double stdevKS = ks_stdev; // 2.44e-5;       // KS key standard deviation
