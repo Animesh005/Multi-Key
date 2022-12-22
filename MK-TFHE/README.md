@@ -27,6 +27,7 @@ To test (from build):
 ./test/mK_Tfhe_Packing-spqlios-fma
 ./test/VolumeMatchMultiKey-spqlios-fma
 ./test/mK_AES-spqlios-fma
+./test/E_Vote-spqlios-fma
 ```
 
 
