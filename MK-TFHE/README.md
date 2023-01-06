@@ -28,7 +28,7 @@ To test (from build):
 ./test/VolumeMatchMultiKey-spqlios-fma
 ./test/mK_AES-spqlios-fma
 ./test/E_Vote-spqlios-fma
-./test/nnInfer-spqlios-fma
+./test/nnInfer_test-spqlios-fma
 ```
 
 
