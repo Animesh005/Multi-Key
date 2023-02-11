@@ -17,7 +17,7 @@ git submodule init
 git submodule update 
 mkdir build
 cd build
-cmake ../src -DENABLE_TESTS=on -DENABLE_FFTW=off -DENABLE_NAYUKI_PORTABLE=off -DENABLE_NAYUKI_AVX=off -DCMAKE_BUILD_TYPE=release -DCMAKE_CXX_FLAGS=-fopenmp
+cmake ../src -DENABLE_TESTS=on -DENABLE_FFTW=off -DENABLE_NAYUKI_PORTABLE=off -DENABLE_NAYUKI_AVX=off -DCMAKE_BUILD_TYPE=release -DCMAKE_CXX_FLAGS=-fopenmp -DCMAKE_CXX_FLAGS=-lopencv_core -DCMAKE_CXX_FLAGS=-lopencv_videoio -DCMAKE_CXX_FLAGS=-lopencv_highgui
 make
 ```
 
