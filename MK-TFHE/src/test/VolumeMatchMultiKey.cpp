@@ -23,7 +23,7 @@
 #include "mkTFHEfunctions.h"
 
 
-#define WIDTH 8
+#define WIDTH 9
 
 using namespace std;
 
@@ -48,10 +48,10 @@ int IntSymDecrypt(MKLweSample *c, MKLweKey* MKlwekey)
     for (int i = 0; i < WIDTH - 1; i++){
         int bit = MKbootsSymDecrypt(&c[i], MKlwekey);
         ans += (bit ^ msb) << i;     // If msb == 1, invert
-        // cout << bit << " ";
+        cout << bit << " ";
     }
-    // cout << msb << " ";
-    // cout << endl;
+    cout << msb << " ";
+    cout << endl;
 
     if (msb == 1){
         ans++;
@@ -101,6 +101,7 @@ void MKbootsMUX(MKLweSample *result, const MKLweSample *a, const MKLweSample *b,
     // Bootstrap without KeySwitch
     // MKtfhe_bootstrap_woKSFFT_v2m2(u1, bkFFT, MU, temp_result, RLWEparams, MKparams, MKrlwekey);
     MKtfhe_bootstrapFFT_v2m2(u1, bkFFT, MU, temp_result, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKrlwekey);   
+    // MKlweCopy(u1, temp_result, MKparams);
 
 
     //compute "AND(not(a),c)": (0,-1/8) - a + c
@@ -111,6 +112,7 @@ void MKbootsMUX(MKLweSample *result, const MKLweSample *a, const MKLweSample *b,
     // Bootstrap without KeySwitch
     // MKtfhe_bootstrap_woKSFFT_v2m2(u2, bkFFT, MU, temp_result, RLWEparams, MKparams, MKrlwekey);
     MKtfhe_bootstrapFFT_v2m2(u2, bkFFT, MU, temp_result, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKrlwekey);   
+    // MKlweCopy(u2, temp_result, MKparams);
 
     // Add u1=u1+u2
     static const Torus32 MuxConst = modSwitchToTorus32(1, 8);
@@ -121,6 +123,7 @@ void MKbootsMUX(MKLweSample *result, const MKLweSample *a, const MKLweSample *b,
     // Key switching
     // MKlweKeySwitch(result, bkFFT->ks, temp_result1, LWEparams, MKparams);
     MKtfhe_bootstrapFFT_v2m2(result, bkFFT, MU, temp_result1, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKrlwekey);
+    // MKlweCopy(result, temp_result1, MKparams);
 
 
     delete_MKLweSample(u2);
@@ -165,6 +168,8 @@ void MKbootsOR(MKLweSample *result, const MKLweSample *ca, const MKLweSample *cb
     //if the phase is positive, the result is 1/8
     //if the phase is positive, else the result is -1/8
     MKtfhe_bootstrapFFT_v2m2(result, bkFFT, MU, temp_result, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKrlwekey);
+    // MKlweCopy(result, temp_result, MKparams);
+    
 
     delete_MKLweSample(temp_result);
 }
@@ -187,6 +192,7 @@ void MKbootsXOR(MKLweSample *result, const MKLweSample *ca, const MKLweSample *c
     //if the phase is positive, the result is 1/8
     //if the phase is positive, else the result is -1/8
     MKtfhe_bootstrapFFT_v2m2(result, bkFFT, MU, temp_result, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKrlwekey);
+    // MKlweCopy(result, temp_result, MKparams);
 
     delete_MKLweSample(temp_result);
 }
@@ -209,6 +215,7 @@ void MKbootsAND(MKLweSample *result, const MKLweSample *ca, const MKLweSample *c
     //if the phase is positive, the result is 1/8
     //if the phase is positive, else the result is -1/8
     MKtfhe_bootstrapFFT_v2m2(result, bkFFT, MU, temp_result, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKrlwekey);
+    // MKlweCopy(result, temp_result, MKparams);
 
     delete_MKLweSample(temp_result);
 }
@@ -216,7 +223,7 @@ void MKbootsAND(MKLweSample *result, const MKLweSample *ca, const MKLweSample *c
 
 // working .....
 void CktAdd(const MKLweBootstrappingKeyFFT_v2 *bkFFT, const LweParams* LWEparams, const LweParams *extractedLWEparams, 
-        const TLweParams* RLWEparams, const MKTFHEParams *MKparams, const MKRLweKey *MKrlwekey,
+        const TLweParams* RLWEparams, const MKTFHEParams *MKparams, MKLweKey* MKlwekey, const MKRLweKey *MKrlwekey,
             MKLweSample *res, MKLweSample *a, MKLweSample *b, MKLweSample *Cin = NULL)
 {
     auto carry = new_MKLweSample(LWEparams, MKparams);
@@ -258,6 +265,42 @@ void CktAdd(const MKLweBootstrappingKeyFFT_v2 *bkFFT, const LweParams* LWEparams
     // delete_MKLweSample_array(WIDTH, tmp_res);
 }
 
+void CktAddWithCarry(const MKLweBootstrappingKeyFFT_v2 *bkFFT, const LweParams* LWEparams, const LweParams *extractedLWEparams, 
+        const TLweParams* RLWEparams, const MKTFHEParams *MKparams, MKLweKey* MKlwekey, const MKRLweKey *MKrlwekey,
+            MKLweSample *res, MKLweSample *a, MKLweSample *b, MKLweSample *Cin = NULL)
+{
+    auto carry = new_MKLweSample(LWEparams, MKparams);
+    auto tmp1 = new_MKLweSample(LWEparams, MKparams);
+    auto tmp2 = new_MKLweSample(LWEparams, MKparams);
+    auto tmp3 = new_MKLweSample(LWEparams, MKparams);
+
+    auto _cin = Cin;
+
+    for (int i = 0; i < WIDTH; i++){
+
+        MKbootsXOR(tmp1, &a[i], &b[i], bkFFT, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKrlwekey);   // tmp1 = a^b
+        MKbootsAND(tmp2, &a[i], &b[i], bkFFT, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKrlwekey);   // tmp2 = ab
+        if (_cin){
+            MKbootsXOR(&res[i], tmp1, _cin, bkFFT, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKrlwekey);  // res = Cin^a^b
+            MKbootsAND(tmp3, tmp1, _cin, bkFFT, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKrlwekey);
+            MKbootsOR(carry, tmp2, tmp3, bkFFT, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKrlwekey);    // carry = ab + Cin(a^b)  
+        }else{
+            MKlweCopy(&res[i], tmp1, MKparams);
+            MKlweCopy(carry, tmp2, MKparams);
+        }
+
+        _cin = carry;
+
+    }
+
+    MKlweCopy(&res[WIDTH], _cin, MKparams);
+
+    delete_MKLweSample(carry);
+    delete_MKLweSample(tmp1);
+    delete_MKLweSample(tmp2);
+    delete_MKLweSample(tmp3);
+}
+
 
 // working .....
 void CktInv(const MKLweBootstrappingKeyFFT_v2 *bkFFT, const LweParams* LWEparams, const LweParams *extractedLWEparams, 
@@ -285,7 +328,7 @@ void CktSub(const MKLweBootstrappingKeyFFT_v2 *bkFFT, const LweParams* LWEparams
     //     MKtfhe_bootstrapFFT_v2m2(&temp_result[i], bkFFT, MU, &tmp[i], LWEparams, extractedLWEparams, RLWEparams, MKparams, MKrlwekey);
     // }
 
-    CktAdd(bkFFT, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKrlwekey, res, a, tmp, one);
+    CktAdd(bkFFT, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKlwekey, MKrlwekey, res, a, tmp, one);
     delete_MKLweSample_array(WIDTH, tmp);
     // delete_MKLweSample_array(WIDTH, temp_result);
 }
@@ -375,6 +418,133 @@ void CktEq(const MKLweBootstrappingKeyFFT_v2 *bkFFT, const LweParams* LWEparams,
     delete_MKLweSample(gol);
 }
 
+void nBitMul(const MKLweBootstrappingKeyFFT_v2 *bkFFT, const LweParams* LWEparams, const LweParams *extractedLWEparams, 
+        const TLweParams* RLWEparams, const MKTFHEParams *MKparams, MKLweKey* MKlwekey, const MKRLweKey *MKrlwekey,
+            MKLweSample *res, MKLweSample *a, MKLweSample *b, MKLweSample *zero, MKLweSample *Cin = NULL)
+{
+    MKLweSample** BArr = new MKLweSample*[WIDTH];
+
+    auto result = new_MKLweSample_array(2*WIDTH, LWEparams, MKparams);
+    // IntSymEncrypt(result, 0, MKlwekey);
+
+    for (int i = 0; i < WIDTH; i++) {
+        BArr[i] = new_MKLweSample_array(WIDTH, LWEparams, MKparams);
+    }
+
+    for (int i=0; i < WIDTH; i++)
+    {
+        for (int j=0; j < WIDTH; j++)
+        {
+            MKbootsAND(&BArr[i][j], &a[j], &b[i], bkFFT, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKrlwekey);
+        }
+    }
+
+    MKlweCopy(&result[0], &BArr[0][0], MKparams);
+
+    auto tmpIn = new_MKLweSample_array(WIDTH, LWEparams, MKparams);
+    // IntSymEncrypt(tmpIn, 0, MKlwekey);
+
+    for (int i=0; i < WIDTH-1; i++)
+        MKlweCopy(&tmpIn[i], &BArr[0][i+1], MKparams);
+
+    MKlweCopy(&tmpIn[WIDTH-1], zero, MKparams);
+
+    int ctr=0;
+
+    for (int i=1; i < WIDTH-1; i++)
+    {
+        auto tmpArr = new_MKLweSample_array(WIDTH+1, LWEparams, MKparams);
+        // IntSymEncrypt(tmpArr, 0, MKlwekey);
+
+        CktAddWithCarry(bkFFT, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKlwekey, MKrlwekey, tmpArr, tmpIn, BArr[i]);
+
+        MKlweCopy(&result[i], &tmpArr[0], MKparams);
+
+        for (int j=0; j < WIDTH; j++)
+            MKlweCopy(&tmpIn[j], &tmpArr[j+1], MKparams);
+
+        ctr = i;
+
+    }
+
+    ctr++;
+
+    auto tmpArr = new_MKLweSample_array(WIDTH+1, LWEparams, MKparams);
+    // IntSymEncrypt(tmpArr, 0, MKlwekey);
+
+    CktAddWithCarry(bkFFT, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKlwekey, MKrlwekey, tmpArr, tmpIn, BArr[ctr]);
+
+    for (int i=0; i <= WIDTH; i++)
+        MKlweCopy(&result[i+ctr], &tmpArr[i], MKparams);
+
+    // copy WIDTH LSB bits
+    for (int i=0; i < WIDTH; i++)
+        MKlweCopy(&res[i], &result[i], MKparams);
+
+
+}
+
+void CktMul(const MKLweBootstrappingKeyFFT_v2 *bkFFT, const LweParams* LWEparams, const LweParams *extractedLWEparams, 
+        const TLweParams* RLWEparams, const MKTFHEParams *MKparams, MKLweKey* MKlwekey, const MKRLweKey *MKrlwekey,
+            MKLweSample *res, MKLweSample *a, MKLweSample *b)
+{
+
+    auto zero = new_MKLweSample(LWEparams, MKparams);
+    auto mres = new_MKLweSample(LWEparams, MKparams);
+
+    MKbootsXOR(mres, &a[WIDTH-1], &b[WIDTH-1], bkFFT, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKrlwekey);
+
+    MKbootsMUX(&a[WIDTH-1], &a[WIDTH-1], zero, &a[WIDTH-1], bkFFT, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKrlwekey);
+    MKbootsMUX(&b[WIDTH-1], &b[WIDTH-1], zero, &b[WIDTH-1], bkFFT, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKrlwekey);
+
+    nBitMul(bkFFT, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKlwekey, MKrlwekey, res, a, b, zero);
+
+    cout << "mres: " << MKbootsSymDecrypt(mres, MKlwekey) << endl;
+    MKbootsMUX(&res[WIDTH-1], mres, mres, mres, bkFFT, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKrlwekey);
+
+}
+
+// void CktMul(const MKLweBootstrappingKeyFFT_v2 *bkFFT, const LweParams* LWEparams, const LweParams *extractedLWEparams, 
+//         const TLweParams* RLWEparams, const MKTFHEParams *MKparams, MKLweKey* MKlwekey, const MKRLweKey *MKrlwekey,
+//             MKLweSample *res, MKLweSample *a, MKLweSample *b, MKLweSample *Cin = NULL)
+// {
+
+//     int msb_a = MKbootsSymDecrypt(&a[WIDTH-1], MKlwekey);
+//     int msb_b = MKbootsSymDecrypt(&b[WIDTH-1], MKlwekey);
+
+//     cout << "\nmsb of a: " << msb_a << " msb of b: " << msb_b << endl;
+
+//     if (msb_a == 1 && msb_b == 1)
+//     {
+//         MKbootsSymEncrypt(&a[WIDTH-1], 0, MKlwekey);
+//         MKbootsSymEncrypt(&b[WIDTH-1], 0, MKlwekey);
+
+//         nBitMul(bkFFT, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKlwekey, MKrlwekey, res, a, b);
+//         MKbootsSymEncrypt(&res[WIDTH-1], 0, MKlwekey);
+//     }
+//     else
+//     {
+//         if (msb_a == 1)
+//         {
+//             MKbootsSymEncrypt(&a[WIDTH-1], 0, MKlwekey);
+//             nBitMul(bkFFT, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKlwekey, MKrlwekey, res, a, b);
+//             MKbootsSymEncrypt(&res[WIDTH-1], 1, MKlwekey);
+//         }
+//         else if(msb_b == 1)
+//         {
+//             MKbootsSymEncrypt(&b[WIDTH-1], 0, MKlwekey);
+//             nBitMul(bkFFT, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKlwekey, MKrlwekey, res, a, b);
+//             MKbootsSymEncrypt(&res[WIDTH-1], 1, MKlwekey);   
+//         }
+//         else
+//         {
+//             nBitMul(bkFFT, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKlwekey, MKrlwekey, res, a, b);
+//         }
+//     }
+
+// }
+
+
 // Buy and Sell order ints should not be longer than WIDTH bits.
 struct Orders
 {
@@ -396,14 +566,14 @@ void VolumeMatch(EncOrders *ord, EncOrders *resOrd,
                  MKLweSample *one)
 {
     for (auto x: ord->buy){
-        CktAdd(bkFFT, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKrlwekey, accTmp1, accBuy, x);
+        CktAdd(bkFFT, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKlwekey, MKrlwekey, accTmp1, accBuy, x);
         for (int i = 0; i < WIDTH; i++){
             MKlweCopy(&accBuy[i], &accTmp1[i], MKparams);
         }
     }
 
     for (auto x: ord->sell){
-        CktAdd(bkFFT, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKrlwekey, accTmp2, accSell, x);
+        CktAdd(bkFFT, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKlwekey, MKrlwekey, accTmp2, accSell, x);
         for (int i = 0; i < WIDTH; i++){
             MKlweCopy(&accSell[i], &accTmp2[i], MKparams);
         }
@@ -472,12 +642,12 @@ int main()
 
     static const int32_t k = 1;
     static const double ks_stdev = 3.05e-6;// 2.44e-5; //standard deviation
-    static const double bk_stdev = 3.72e-10; // 3.29e-10; //standard deviation
-    static const double max_stdev = 0.001; //max standard deviation for a 1/4 msg space
+    static const double bk_stdev = 3.29e-10; // 3.72e-9; // 3.29e-10; //standard deviation
+    static const double max_stdev = 2.44e-5; //max standard deviation for a 1/4 msg space
     static const int32_t n = 560; //500;            // LWE modulus
     static const int32_t n_extract = 1024;    // LWE extract modulus (used in bootstrapping)
     static const int32_t hLWE = 0;         // HW secret key LWE --> not used
-    static const double stdevLWE = 0.001;      // LWE ciphertexts standard deviation
+    static const double stdevLWE = 2.44e-5;      // LWE ciphertexts standard deviation
     static const int32_t Bksbit = 2;       // Base bit key switching
     static const int32_t dks = 8;          // dimension key switching
     static const double stdevKS = ks_stdev; // 2.44e-5;       // KS key standard deviation
@@ -539,107 +709,122 @@ int main()
     // <sell orders space separated>
     // <buy orders space separated>
 
-    vector<int> sellOrd;
-    vector<int> buyOrd;
+    // vector<int> sellOrd;
+    // vector<int> buyOrd;
 
-    int ns, m, tmp;
-    cout << "Enter the volumes: " << endl;
-    cin >> ns >> m;
-    for (int i = 0; i < ns; i++){
-        cin >> tmp;
-        if (tmp < 0){
-            cerr << "Order cannot be negative. Skipping " << tmp << endl;
-        }
-        sellOrd.push_back(tmp);
-    }
+    // int ns, m, tmp;
+    // cout << "Enter the volumes: " << endl;
+    // cin >> ns >> m;
+    // for (int i = 0; i < ns; i++){
+    //     cin >> tmp;
+    //     if (tmp < 0){
+    //         cerr << "Order cannot be negative. Skipping " << tmp << endl;
+    //     }
+    //     sellOrd.push_back(tmp);
+    // }
 
-    for (int i = 0; i < m; i++){
-        cin >> tmp;
-        if (tmp < 0){
-            cerr << "Order cannot be negative. Skipping " << tmp << endl;
-        }
-        buyOrd.push_back(tmp);
-    }
+    // for (int i = 0; i < m; i++){
+    //     cin >> tmp;
+    //     if (tmp < 0){
+    //         cerr << "Order cannot be negative. Skipping " << tmp << endl;
+    //     }
+    //     buyOrd.push_back(tmp);
+    // }
 
-    cout << "Input DONE!" << endl;
+    // cout << "Input DONE!" << endl;
 
-    EncOrders ord, resOrd;
+    // EncOrders ord, resOrd;
 
-    clock_t begin_Enc = clock();
+    // clock_t begin_Enc = clock();
 
-    for (int s: sellOrd){
-        auto encS = new_MKLweSample_array(WIDTH, LWEparams, MKparams);
-        IntSymEncrypt(encS, s, MKlwekey);
-        ord.sell.push_back(encS);
-    }
+    // for (int s: sellOrd){
+    //     auto encS = new_MKLweSample_array(WIDTH, LWEparams, MKparams);
+    //     IntSymEncrypt(encS, s, MKlwekey);
+    //     ord.sell.push_back(encS);
+    // }
 
-    for (int b: buyOrd){
-        auto encB = new_MKLweSample_array(WIDTH, LWEparams, MKparams);
-        IntSymEncrypt(encB, b, MKlwekey);
-        ord.buy.push_back(encB);
-    }
+    // for (int b: buyOrd){
+    //     auto encB = new_MKLweSample_array(WIDTH, LWEparams, MKparams);
+    //     IntSymEncrypt(encB, b, MKlwekey);
+    //     ord.buy.push_back(encB);
+    // }
 
-    auto accBuy = new_MKLweSample_array(WIDTH, LWEparams, MKparams);
-    auto accSell = new_MKLweSample_array(WIDTH, LWEparams, MKparams);
-    auto accTmp1 = new_MKLweSample_array(WIDTH, LWEparams, MKparams);
-    auto accTmp2 = new_MKLweSample_array(WIDTH, LWEparams, MKparams);
-    auto one = new_MKLweSample(LWEparams, MKparams);
-
-
-    IntSymEncrypt(accBuy, 0, MKlwekey);
-    IntSymEncrypt(accSell, 0, MKlwekey);
-    IntSymEncrypt(accTmp1, 0, MKlwekey);
-    IntSymEncrypt(accTmp2, 0, MKlwekey);
-    MKbootsSymEncrypt(one, 1, MKlwekey);
-
-    VolumeMatch(&ord, &resOrd, accBuy, accSell, accTmp1, accTmp2, MKlweBK_FFT, LWEparams, extractedLWEparams, 
-    RLWEparams, MKparams, MKlwekey, MKrlwekey, one);
-
-    clock_t end_Enc = clock();
-    double time_Enc = ((double) end_Enc - begin_Enc)/CLOCKS_PER_SEC;
-
-    cout << "Finished Time: " << time_Enc << "seconds" << endl;
-
-    cout << "Resulting Sell:" << endl;
-    for (auto x: resOrd.sell){
-        cout << IntSymDecrypt(x, MKlwekey) << endl;
-    }
-
-    cout << "Resulting Buy:" << endl;
-    for (auto x: resOrd.buy){
-        cout << IntSymDecrypt(x, MKlwekey) << endl;
-    }
+    // auto accBuy = new_MKLweSample_array(WIDTH, LWEparams, MKparams);
+    // auto accSell = new_MKLweSample_array(WIDTH, LWEparams, MKparams);
+    // auto accTmp1 = new_MKLweSample_array(WIDTH, LWEparams, MKparams);
+    // auto accTmp2 = new_MKLweSample_array(WIDTH, LWEparams, MKparams);
+    // auto one = new_MKLweSample(LWEparams, MKparams);
 
 
-    // int bit1;
-    // int bit2;
+    // IntSymEncrypt(accBuy, 0, MKlwekey);
+    // IntSymEncrypt(accSell, 0, MKlwekey);
+    // IntSymEncrypt(accTmp1, 0, MKlwekey);
+    // IntSymEncrypt(accTmp2, 0, MKlwekey);
+    // MKbootsSymEncrypt(one, 1, MKlwekey);
+
+    // VolumeMatch(&ord, &resOrd, accBuy, accSell, accTmp1, accTmp2, MKlweBK_FFT, LWEparams, extractedLWEparams, 
+    // RLWEparams, MKparams, MKlwekey, MKrlwekey, one);
+
+    // clock_t end_Enc = clock();
+    // double time_Enc = ((double) end_Enc - begin_Enc)/CLOCKS_PER_SEC;
+
+    // cout << "Finished Time: " << time_Enc << "seconds" << endl;
+
+    // cout << "Resulting Sell:" << endl;
+    // for (auto x: resOrd.sell){
+    //     cout << IntSymDecrypt(x, MKlwekey) << endl;
+    // }
+
+    // cout << "Resulting Buy:" << endl;
+    // for (auto x: resOrd.buy){
+    //     cout << IntSymDecrypt(x, MKlwekey) << endl;
+    // }
+
+
+    int bit1;
+    int bit2;
     // int bit3;
 
-    // cout << "Enter the inputs: " << endl;
+    cout << "Enter the inputs: " << endl;
 
-    // for (int i=0; i < 4; i++)
-    // {
-    //     cin >> bit1 >> bit2 >> bit3;
+    for (int i=0; i < 5; i++)
+    {
+        cin >> bit1 >> bit2;
 
-    //     cout << bit1 << " " << bit2 << " " << bit3 << endl;
+        cout << bit1 << " " << bit2 << endl;
 
-    //     auto a = new_MKLweSample_array(WIDTH, LWEparams, MKparams);
-    //     IntSymEncrypt(a, bit1, MKlwekey);
+        auto a = new_MKLweSample_array(WIDTH, LWEparams, MKparams);
+        IntSymEncrypt(a, bit1, MKlwekey);
 
-    //     auto b = new_MKLweSample_array(WIDTH, LWEparams, MKparams);
-    //     IntSymEncrypt(b, bit2, MKlwekey);
+        auto b = new_MKLweSample_array(WIDTH, LWEparams, MKparams);
+        IntSymEncrypt(b, bit2, MKlwekey);
 
-    //     auto c = new_MKLweSample_array(WIDTH, LWEparams, MKparams);
-    //     IntSymEncrypt(c, bit3, MKlwekey);
+        // auto zero = new_MKLweSample(LWEparams, MKparams);
+        // MKbootsSymEncrypt(zero, 0, MKlwekey);
 
-    //     auto res = new_MKLweSample_array(WIDTH, LWEparams, MKparams);
-    //     IntSymEncrypt(res, 0, MKlwekey);
+        // auto one = new_MKLweSample(LWEparams, MKparams);
+        // MKbootsSymEncrypt(one, 1, MKlwekey);
 
-    //     CktLeq(MKlweBK_FFT, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKlwekey, MKrlwekey, res, a, b, c);
+        // auto mres = new_MKLweSample(LWEparams, MKparams);
 
-    //     cout << IntSymDecrypt(res, MKlwekey) << endl;
+        auto res = new_MKLweSample_array(WIDTH, LWEparams, MKparams);
+        IntSymEncrypt(res, 0, MKlwekey);
 
-    // }
+        // clock_t begin_Mul = clock();
+        struct timespec mul_start = {0, 0};
+	    struct timespec mul_end = {0, 0};
+
+        clock_gettime(CLOCK_MONOTONIC, &mul_start);
+        CktMul(MKlweBK_FFT, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKlwekey, MKrlwekey, res, a, b);
+        clock_gettime(CLOCK_MONOTONIC, &mul_end);
+
+        // clock_t end_Mul = clock();
+        // double time_Mul = ((double) end_Mul - begin_Mul)/CLOCKS_PER_SEC;
+
+        // cout << IntSymDecrypt(res, MKlwekey) << ": Time --> " << time_Mul << " sec"<< endl;
+        cout << IntSymDecrypt(res, MKlwekey) << ": Time --> " << (((double)mul_end.tv_nsec + 1.0e+9 * mul_end.tv_sec) - ((double)mul_start.tv_nsec + 1.0e+9 * mul_start.tv_sec)) * 1.0e-9 << " sec" << endl;
+
+    }
 
     // cout << "Enter the inputs: " << endl;
 
