@@ -22,6 +22,8 @@
 #include "mkTFHEsamples.h"
 #include "mkTFHEfunctions.h"
 
+#include <omp.h>
+
 
 using namespace std;
 
@@ -38,7 +40,7 @@ using namespace std;
 EXPORT void MKlweSymEncrypt(MKLweSample* result, Torus32 message, double alpha, const MKLweKey* key){
     const int32_t n = key->LWEparams->n;
     const int32_t parties = key->MKparams->parties;
-    
+    // cout << "\nAlpha: " << alpha << endl;
     result->b = gaussian32(message, alpha); 
 
     for (int i = 0; i < parties; ++i)
@@ -1494,9 +1496,16 @@ EXPORT void MKtGswUEExternMulToMKtLwe_FFT_v2m2(MKTLweSample* result, MKTLweSampl
     // uDec[i*dg] = g^{-1}(a_i), uDec[parties*dg] = g^{-1}(b), 
     IntPolynomial* uDec = new_IntPolynomial_array(parties1dg, N);
     LagrangeHalfCPolynomial *uDecFFT = new_LagrangeHalfCPolynomial_array(parties1dg, N); //fft version
+
+    // omp_set_num_threads(omp_get_num_threads());
+    // #pragma omp parallel for
+
     for (int i = 0; i <= parties; ++i){
         MKtGswTorus32PolynomialDecompGassembly(&uDec[i*dg], &sample->a[i], MKparams);
     }
+    // omp_set_num_threads(parties1dg);
+
+    #pragma omp parallel for
     for (int p = 0; p < parties1dg; ++p){
         IntPolynomial_ifft(&uDecFFT[p], &uDec[p]); // FFT
     }
@@ -1509,6 +1518,10 @@ EXPORT void MKtGswUEExternMulToMKtLwe_FFT_v2m2(MKTLweSample* result, MKTLweSampl
     // uFFT[i] = uDecFFT[i] * dFFT
     // LagrangeHalfCPolynomial *uFFT = new_LagrangeHalfCPolynomial_array(parties+1, N); 
     TorusPolynomial *u = new_TorusPolynomial_array(parties+1, N);
+
+    // omp_set_num_threads(parties);
+
+    #pragma omp parallel for
     for (int i = 0; i <= parties; ++i)
     {
         // LagrangeHalfCPolynomialClear(&uFFT[i]);
@@ -1527,6 +1540,10 @@ EXPORT void MKtGswUEExternMulToMKtLwe_FFT_v2m2(MKTLweSample* result, MKTLweSampl
     // computed non in FFT because it needs to be decomposed
     // v[i] = uDec[i] * b_i, for i < parties  
     TorusPolynomial* v = new_TorusPolynomial_array(parties+1, N);
+
+    // omp_set_num_threads(parties);
+
+    #pragma omp parallel for
     for (int i = 0; i < parties; ++i)
     {
         torusPolynomialClearN(&v[i], N);
@@ -1537,6 +1554,10 @@ EXPORT void MKtGswUEExternMulToMKtLwe_FFT_v2m2(MKTLweSample* result, MKTLweSampl
     }
     // v[parties] = - uDec[parties] * a
     torusPolynomialClearN(&v[parties], N);
+
+    // omp_set_num_threads(dg);
+
+    // #pragma omp parallel for
     for (int j = 0; j < dg; ++j)
     {
         torusPolynomialSubMulRFFTN(&v[parties], &uDec[parties*dg+j], &RLWEkey->Pkey[parties*dg + j], N);
@@ -1545,10 +1566,18 @@ EXPORT void MKtGswUEExternMulToMKtLwe_FFT_v2m2(MKTLweSample* result, MKTLweSampl
     // vDec[i] = g^{-1}(v[i]) 
     IntPolynomial* vDec = new_IntPolynomial_array(parties1dg, N);
     LagrangeHalfCPolynomial *vDecFFT = new_LagrangeHalfCPolynomial_array(parties1dg, N); //fft version
+
+    // omp_set_num_threads(parties);
+
+    // #pragma omp parallel for
     for (int i = 0; i <= parties; ++i)
     {
         MKtGswTorus32PolynomialDecompGassembly(&vDec[i*dg], &v[i], MKparams);
     }
+
+    // omp_set_num_threads(parties1dg);
+
+    // #pragma omp parallel for
     for (int p = 0; p < parties1dg; ++p){
         IntPolynomial_ifft(&vDecFFT[p], &vDec[p]); // FFT
     } 
@@ -1557,6 +1586,10 @@ EXPORT void MKtGswUEExternMulToMKtLwe_FFT_v2m2(MKTLweSample* result, MKTLweSampl
     // w0FFT[i] = vDecFFT[i] * f0FFT
     //LagrangeHalfCPolynomial *w0FFT = new_LagrangeHalfCPolynomial_array(parties+1, N); 
     TorusPolynomial *w0 = new_TorusPolynomial_array(parties+1, N);
+
+    // omp_set_num_threads(parties);
+
+    // #pragma omp parallel for
     for (int i = 0; i <= parties; ++i)
     {
         // LagrangeHalfCPolynomialClear(&w0FFT[i]);
@@ -1572,6 +1605,10 @@ EXPORT void MKtGswUEExternMulToMKtLwe_FFT_v2m2(MKTLweSample* result, MKTLweSampl
     // w1FFT[i] = vDecFFT[i] * f1FFT
     // LagrangeHalfCPolynomial *w1FFT = new_LagrangeHalfCPolynomial_array(parties+1, N); 
     TorusPolynomial *w1 = new_TorusPolynomial_array(parties+1, N);
+
+    // omp_set_num_threads(parties);
+
+    // #pragma omp parallel for
     for (int i = 0; i <= parties; ++i)
     {
         // LagrangeHalfCPolynomialClear(&w1FFT[i]);
@@ -1587,17 +1624,25 @@ EXPORT void MKtGswUEExternMulToMKtLwe_FFT_v2m2(MKTLweSample* result, MKTLweSampl
 
 
 
-
+    // cout << "\n\nNumber of Threads: " << omp_get_num_threads();
 
 
 
     // the result is not in FFT
     // c'_i = invFFT(uFFT[i]), i<parties, i!=party
+
+    // omp_set_num_threads(party);
+
+    // #pragma omp parallel for
     for (int i = 0; i < party; ++i)
     {
         torusPolynomialCopyN(&result->a[i], &u[i], N);
         //TorusPolynomial_fft(&result->a[i], &uFFT[i]); // invFFT        
     }
+
+    // omp_set_num_threads(parties);
+
+    // #pragma omp parallel for
     for (int i = party+1; i < parties; ++i)
     {
         torusPolynomialCopyN(&result->a[i], &u[i], N);
@@ -1840,8 +1885,9 @@ EXPORT void MKtfhe_blindRotateFFT_v2m2(MKTLweSample *accum, const MKTGswUESample
     MKTLweSample *temp1 = new_MKTLweSample(RLWEparams, MKparams);
     MKtLweCopy(temp1, accum, MKparams); 
 
-
-
+    // omp_set_num_threads(parties);
+    // #pragma omp parallel for
+    // #pragma omp parallel for collapse(2)
     for (int i = 0; i < parties; ++i)
     {
         for (int j = 0; j < n; ++j)
@@ -2041,6 +2087,11 @@ EXPORT void MKtfhe_bootstrap_woKSFFT_v2m2(MKLweSample *result, const MKLweBootst
     // b*2N
     int32_t barb = modSwitchFromTorus32(x->b, Nx2);
     // a*2N
+
+    // omp_set_num_threads(parties);
+    // omp_set_num_threads(omp_get_num_threads());
+
+    #pragma omp parallel for collapse(2)
     for (int i = 0; i < parties; ++i)
     {
         for (int j = 0; j < n; ++j)
@@ -2051,6 +2102,9 @@ EXPORT void MKtfhe_bootstrap_woKSFFT_v2m2(MKLweSample *result, const MKLweBootst
     
 
     //the initial testvec = [mu,mu,mu,...,mu]
+    // omp_set_num_threads(omp_get_num_threads());
+
+    #pragma omp parallel for
     for (int32_t i = 0; i < N; i++) 
     {
         testvect->coefsT[i] = mu;
