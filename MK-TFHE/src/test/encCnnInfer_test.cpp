@@ -29,13 +29,17 @@
 #include <omp.h>
 
 using namespace std;
-#define WIDTH 9
+#define WIDTH 5
 
 const int INPUT_WIDTH = 28;
 const int INPUT_HEIGHT = 28;
 const int NUM_CLASSES = 10;
-const int pooling_size = 2;
-const int kernel_size = 5;
+const int WINDOW_SIZE = 4;
+const int FILTER_SIZE = 4;
+const int NUM_FILTERS = 5;
+const int STRIDE = 2;
+const int NUM_TEST_IMAGES = 10000;
+const int NUM_TEST_LABELS = 10000;
 
 void MKbootsAsymEncrypt(MKLweSample* result, int32_t message, Torus32* crs, Torus32 pk){
 
@@ -178,8 +182,7 @@ void MKbootsMUX(MKLweSample *result, const MKLweSample *a, const MKLweSample *b,
 
     // Bootstrap without KeySwitch
     // MKtfhe_bootstrap_woKSFFT_v2m2(u1, bkFFT, MU, temp_result, RLWEparams, MKparams, MKrlwekey);
-    MKtfhe_bootstrapFFT_v2m2(u1, bkFFT, MU, temp_result, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKrlwekey);
-    // MKlweCopy(u1, temp_result, MKparams);   
+    MKtfhe_bootstrapFFT_v2m2(u1, bkFFT, MU, temp_result, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKrlwekey); 
 
 
     //compute "AND(not(a),c)": (0,-1/8) - a + c
@@ -190,7 +193,6 @@ void MKbootsMUX(MKLweSample *result, const MKLweSample *a, const MKLweSample *b,
     // Bootstrap without KeySwitch
     // MKtfhe_bootstrap_woKSFFT_v2m2(u2, bkFFT, MU, temp_result, RLWEparams, MKparams, MKrlwekey);
     MKtfhe_bootstrapFFT_v2m2(u2, bkFFT, MU, temp_result, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKrlwekey);   
-    // MKlweCopy(u2, temp_result, MKparams);
 
     // Add u1=u1+u2
     static const Torus32 MuxConst = modSwitchToTorus32(1, 8);
@@ -201,7 +203,6 @@ void MKbootsMUX(MKLweSample *result, const MKLweSample *a, const MKLweSample *b,
     // Key switching
     // MKlweKeySwitch(result, bkFFT->ks, temp_result1, LWEparams, MKparams);
     MKtfhe_bootstrapFFT_v2m2(result, bkFFT, MU, temp_result1, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKrlwekey);
-    // MKlweCopy(result, temp_result1, MKparams);
 
 
     delete_MKLweSample(u2);
@@ -495,69 +496,88 @@ void CktMax(const MKLweBootstrappingKeyFFT_v2 *bkFFT, const LweParams* LWEparams
 }
 
 
-vector<vector<MKLweSample*>> convolution(vector<vector<MKLweSample*>>& input, vector<vector<MKLweSample*>>& kernel, 
+vector<vector<vector<MKLweSample*>>> enc_conv2d(vector<vector<MKLweSample*>>& input, vector<vector<vector<MKLweSample*>>>& kernels, vector<MKLweSample*> &bias, 
                         const MKLweBootstrappingKeyFFT_v2 *bkFFT, const LweParams* LWEparams, const LweParams *extractedLWEparams, 
                         const TLweParams* RLWEparams, const MKTFHEParams *MKparams, const MKRLweKey *MKrlwekey, 
-                        Torus32* crs, vector<Torus32> publicKey, int id) {
+                        Torus32* crs, vector<Torus32> publicKey, int id, MKLweKey* MKlwekey) {
 
     int input_width = input.size();
     int input_height = input[0].size();
-    int kernel_width = kernel.size();
-    int kernel_height = kernel[0].size();
-    int output_width = input_width - kernel_width + 1;
-    int output_height = input_height - kernel_height + 1;
+    int output_height = (input_height - FILTER_SIZE) / STRIDE + 1;
+    int output_width = (input_width - FILTER_SIZE) / STRIDE + 1;
 
-    auto zero = new_MKLweSample_array(WIDTH, LWEparams, MKparams);
+    vector<vector<vector<MKLweSample*>>> outputs(NUM_FILTERS, vector<vector<MKLweSample*>>(output_width, vector<MKLweSample*>(output_height)));
 
-    IntAsymEncrypt(zero, 0, crs, publicKey[id]);
-    genExtCipherArr(zero, zero, id, publicKey);
+    // omp_set_num_threads(NUM_FILTERS);
 
-    vector<vector<MKLweSample*>> output(output_width, vector<MKLweSample*>(output_height, zero));
+    // #pragma omp parallel for
+    for (int c = 0; c < NUM_FILTERS; c++)
+    {   
+        cout << "c: " << c << endl;
+        for (int i = 0; i < output_height; i++) {
+            for (int j = 0; j < output_width; j++) {
+                auto sum = new_MKLweSample_array(WIDTH, LWEparams, MKparams);
+                for (int m = 0; m < FILTER_SIZE; m++) {
+                    for (int n = 0; n < FILTER_SIZE; n++) {
+                        int x = i * STRIDE + m;
+                        int y = j * STRIDE + n;
+                        cout << "x: " << x << ", y: " << y << endl;
+                        // sum += input[x][y] * kernels[c][m][n];
+                        auto mulTmp = new_MKLweSample_array(WIDTH, LWEparams, MKparams);
+                        CktMul(bkFFT, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKrlwekey, mulTmp, input[x][y], kernels[c][m][n]);
+                        CktAdd(bkFFT, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKrlwekey, sum, sum, mulTmp);
+                    }
 
-    for (int i = 0; i < output_width; i++) {
-        for (int j = 0; j < output_height; j++) {
-            for (int m = 0; m < kernel_width; m++) {
-                for (int n = 0; n < kernel_height; n++) {
-                    // output[i][j] += input[i + m][j + n] * kernel[m][n];
-                    auto outTmp = new_MKLweSample_array(WIDTH, LWEparams, MKparams);
-                    CktMul(bkFFT, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKrlwekey, outTmp, input[i + m][j + n], kernel[m][n]);
-                    CktAdd(bkFFT, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKrlwekey, output[i][j], output[i][j], outTmp);
                 }
-
+                // outputs[c][i][j] = sum + bias[c];
+                CktAdd(bkFFT, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKrlwekey, outputs[c][i][j], sum, bias[c]);
+                cout << "output: " << IntSymDecrypt(outputs[c][i][j], MKlwekey) << endl;
             }
 
         }
-
     }
 
-    return output;
+    return outputs;
 }
 
 
-vector<vector<MKLweSample*>> max_pooling_2d(vector<vector<MKLweSample*>> &inputs,
+vector<vector<vector<MKLweSample*>>> enc_max_pooling2d(vector<vector<vector<MKLweSample*>>> &input,
                         const MKLweBootstrappingKeyFFT_v2 *bkFFT, const LweParams* LWEparams, const LweParams *extractedLWEparams, 
                         const TLweParams* RLWEparams, const MKTFHEParams *MKparams, const MKRLweKey *MKrlwekey, 
                         Torus32* crs, vector<Torus32> publicKey, int id) {
 
-    int output_width = inputs.size() / pooling_size;
-    int output_height = inputs[0].size() / pooling_size;
+    int input_height = input[0].size();
+    int input_width = input[0][0].size();
+    int output_height = input_height / WINDOW_SIZE;
+    int output_width = input_width / WINDOW_SIZE;
 
     auto one = new_MKLweSample_array(WIDTH, LWEparams, MKparams);
-
     IntAsymEncrypt(one, 1, crs, publicKey[id]);
     genExtCipherArr(one, one, id, publicKey);
 
-    vector<vector<MKLweSample*>> outputs(output_width, vector<MKLweSample*>(output_height, 0));
+    auto max_val = new_MKLweSample_array(WIDTH, LWEparams, MKparams);
+    IntAsymEncrypt(max_val, -10, crs, publicKey[id]);
+    genExtCipherArr(max_val, max_val, id, publicKey);
 
-    for (int i = 0; i < output_width; i++) {
-        for (int j = 0; j < output_height; j++) {
-            auto maxVal = inputs[i * pooling_size][j * pooling_size];
-            for (int k = 0; k < pooling_size; k++) {
-                for (int l = 0; l < pooling_size; l++) {
-                    CktMax(bkFFT, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKrlwekey, maxVal, maxVal, inputs[i * pooling_size + k][j * pooling_size + l], one);
+    vector<vector<vector<MKLweSample*>>> outputs(NUM_FILTERS, vector<vector<MKLweSample*>>(output_height, vector<MKLweSample*>(output_width)));
+
+    // omp_set_num_threads(NUM_FILTERS);
+
+    // #pragma omp parallel for
+    for (int c = 0; c < NUM_FILTERS; c++){
+        for (int i = 0; i < output_height; i++) {
+            for (int j = 0; j < output_width; j++) {
+                auto enc_max_val = max_val;
+                for (int m = 0; m < WINDOW_SIZE; m++) {
+                    for (int n = 0; n < WINDOW_SIZE; n++) {
+                        int x = i * WINDOW_SIZE + m;
+                        int y = j * WINDOW_SIZE + n;
+                        // max_val = max(max_val, input[c][x][y]);
+                        CktMax(bkFFT, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKrlwekey, enc_max_val, enc_max_val, input[c][x][y], one);
+                    }
                 }
+                outputs[c][i][j] = enc_max_val;
             }
-            outputs[i][j] = maxVal;
         }
     }
     
@@ -565,12 +585,16 @@ vector<vector<MKLweSample*>> max_pooling_2d(vector<vector<MKLweSample*>> &inputs
 }
 
 
-vector<MKLweSample*> flatten(vector<vector<MKLweSample*>> &inputs)
+vector<MKLweSample*> enc_flatten(vector<vector<vector<MKLweSample*>>> &inputs)
 {
     vector<MKLweSample*> outputs;
-    for (int i = 0; i < (int)inputs.size(); i++) {
-        for (int j = 0; j < (int)inputs[i].size(); j++) {
-            outputs.push_back(inputs[i][j]);
+
+    // #pragma omp parallel for
+    for (const auto &channel : inputs) {
+        for (const auto &row : channel) {
+            for (const auto &val : row) {
+                outputs.push_back(val);
+            }
         }
     }
 
@@ -578,7 +602,7 @@ vector<MKLweSample*> flatten(vector<vector<MKLweSample*>> &inputs)
 }
 
 
-vector<MKLweSample*> FC_Layer(vector<MKLweSample*>& input, vector<vector<MKLweSample*>>& weights, vector<MKLweSample*>& biases, 
+vector<MKLweSample*> enc_fc_layer(vector<MKLweSample*>& input, vector<vector<MKLweSample*>>& weights, vector<MKLweSample*>& biases, 
                             const MKLweBootstrappingKeyFFT_v2 *bkFFT, const LweParams* LWEparams, const LweParams *extractedLWEparams, 
                             const TLweParams* RLWEparams, const MKTFHEParams *MKparams, const MKRLweKey *MKrlwekey, 
                             Torus32* crs, vector<Torus32> publicKey, int id) {
@@ -586,18 +610,14 @@ vector<MKLweSample*> FC_Layer(vector<MKLweSample*>& input, vector<vector<MKLweSa
     int input_size = input.size();
     int output_size = biases.size();
 
-    auto zero = new_MKLweSample_array(WIDTH, LWEparams, MKparams);
-    IntAsymEncrypt(zero, 0, crs, publicKey[id]);
-    genExtCipherArr(zero, zero, id, publicKey);
-
-    vector<MKLweSample*> output(output_size, zero);
+    vector<MKLweSample*> output(output_size);
 
     for (int i = 0; i < output_size; i++) {
         for (int j = 0; j < input_size; j++) {
         //   output[i] += input[j] * weights[j][i];
-            auto outTmp = new_MKLweSample_array(WIDTH, LWEparams, MKparams);
-            CktMul(bkFFT, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKrlwekey, outTmp, input[j], weights[j][i]);
-            CktAdd(bkFFT, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKrlwekey, output[i], output[i], outTmp);
+            auto mulTmp = new_MKLweSample_array(WIDTH, LWEparams, MKparams);
+            CktMul(bkFFT, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKrlwekey, mulTmp, input[j], weights[j][i]);
+            CktAdd(bkFFT, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKrlwekey, output[i], output[i], mulTmp);
         }
         // output[i] += biases[i];
         CktAdd(bkFFT, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKrlwekey, output[i], output[i], biases[i]);
@@ -627,25 +647,201 @@ MKLweSample* CktRelu(MKLweSample* x, const MKLweBootstrappingKeyFFT_v2 *bkFFT, c
 }
 
 
-vector<vector<MKLweSample*>> relu(vector<vector<MKLweSample*>> &inputs, const MKLweBootstrappingKeyFFT_v2 *bkFFT, 
+vector<vector<vector<MKLweSample*>>> enc_relu(vector<vector<vector<MKLweSample*>>> &inputs, const MKLweBootstrappingKeyFFT_v2 *bkFFT, 
                                 const LweParams* LWEparams, const LweParams *extractedLWEparams, const TLweParams* RLWEparams, 
                                 const MKTFHEParams *MKparams, const MKRLweKey *MKrlwekey, 
                                 Torus32* crs, vector<Torus32> publicKey, int id){
-  int width = inputs.size();
-  int height = inputs[0].size();
+    int depth = inputs.size();
+    int height = inputs[0].size();
+    int width = inputs[0][0].size();
 
-  vector<vector<MKLweSample*>> outputs(width, vector<MKLweSample*>(height, 0));
+    vector<vector<vector<MKLweSample*>>> outputs(depth, vector<vector<MKLweSample*>>(height, vector<MKLweSample*>(width)));
 
-  for (int i = 0; i < width; i++)
-  {
-    for (int j=0; j < height; j++)
+    for (int d = 0; d < depth; d++)
     {
-        outputs[i][j] = CktRelu(inputs[i][j], bkFFT, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKrlwekey, crs, publicKey, id);
+        for (int i = 0; i < height; i++)
+        {
+            for (int j=0; j < width; j++)
+            {
+                outputs[d][i][j] = CktRelu(inputs[d][i][j], bkFFT, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKrlwekey, crs, publicKey, id);
+            }
+        }
     }
-  }
 
-    return outputs;
+        return outputs;
 }
+
+vector<vector<int>> transpose_matrix(vector<vector<int>> original_vector){
+
+    vector<vector<int>> transposed_vector((int)original_vector[0].size(), vector<int>((int)original_vector.size()));
+
+    for (int i = 0; i < (int)original_vector.size(); ++i) {
+        for (int j = 0; j < (int)original_vector[0].size(); ++j) {
+            transposed_vector[j][i] = original_vector[i][j];
+        }
+    }
+    
+    return transposed_vector;
+}
+
+vector<vector<vector<int>>> load_test_data()
+{
+    ifstream file_test_data("test/mnist_data/t10k-images.idx3-ubyte", std::ios::binary);
+
+    if (!file_test_data.is_open()) {
+        std::cerr << "Failed to open image file\n";
+    }
+
+    // Skip the first 16 bytes of the file, which contain header information
+    file_test_data.seekg(16);
+
+    // Read the contents of the file into a vector
+    std::vector<unsigned char> train_data((std::istreambuf_iterator<char>(file_test_data)),
+                                    std::istreambuf_iterator<char>());
+
+    // Create a 3D array to store the image data
+    std::vector<std::vector<std::vector<int>>> images(NUM_TEST_IMAGES, std::vector<std::vector<int>>(INPUT_HEIGHT, std::vector<int>(INPUT_WIDTH)));
+
+    // Fill the image data from the vector
+    for (int i = 0; i < NUM_TEST_IMAGES; i++) {
+        for (int j = 0; j < INPUT_HEIGHT; j++) {
+            for (int k = 0; k < INPUT_WIDTH; k++) {
+                images[i][j][k] = ((int)train_data[i * INPUT_HEIGHT * INPUT_WIDTH + j * INPUT_WIDTH + k] > 0) ? 1 : 0;
+            }
+        }
+    }
+
+    return images;
+}
+
+std::vector<int> load_test_labels()
+{
+    std::ifstream file_test_label("test/mnist_data/t10k-labels.idx1-ubyte", std::ios::binary);
+
+    if (!file_test_label.is_open()) {
+        std::cerr << "Failed to open label file\n";
+    }
+
+    // Skip the first 8 bytes of the file, which contain header information
+    file_test_label.seekg(8);
+
+    // Read the contents of the file into a vector
+    std::vector<unsigned char> train_label((std::istreambuf_iterator<char>(file_test_label)),
+                                    std::istreambuf_iterator<char>());
+
+    // Create a 1D array to store the label data
+    std::vector<int> labels(NUM_TEST_LABELS);
+
+    // Fill the label data from the vector
+    for (int i = 0; i < NUM_TEST_LABELS; i++) {
+        labels[i] = (int)train_label[i];
+    }
+
+    return labels;
+}
+
+vector<vector<vector<int>>> load_cnn_weight()
+{
+    ifstream file("test/model_params/cnn_weight.txt");
+    if (!file.is_open()) {
+        cerr << "Failed to open the file" << endl;
+    }
+
+    int rows, columns, depth;
+    file >> rows >> columns >> depth;
+
+    // Create a 3D vector to store the array
+    vector<vector<vector<int>>> arr(depth, vector<vector<int>>(rows, vector<int>(columns)));
+
+    // Read the data from the file and store it in the 3D vector
+    for (int d = 0; d < depth; ++d) {
+        for (int i = 0; i < rows; ++i) {
+            for (int j = 0; j < columns; ++j) {
+                file >> arr[d][i][j];
+            }
+        }
+    }
+
+    // Close the file
+    file.close();
+
+    return arr;
+}
+
+vector<int> load_cnn_bias()
+{
+    ifstream file("test/model_params/cnn_bias.txt");
+    if (!file.is_open()) {
+        cerr << "Failed to open the file" << endl;
+    }
+
+    int columns;
+    file >> columns;
+
+    // Create a 1D vector to store the array
+    vector<int> arr(columns);
+
+    // Read the data from the file and store it in the 1D vector
+    for (int j = 0; j < columns; ++j) {
+        file >> arr[j];
+    }
+
+    // Close the file
+    file.close();
+
+    return arr;
+}
+
+vector<vector<int>> load_fc_weight()
+{
+    ifstream file("test/model_params/fc_weight.txt");
+    if (!file.is_open()) {
+        cerr << "Failed to open the file" << endl;
+    }
+
+    int rows, columns;
+    file >> rows >> columns;
+
+    // Create a 2D vector to store the array
+    vector<vector<int>> arr(rows, vector<int>(columns));
+
+    // Read the data from the file and store it in the 2D vector
+    for (int i = 0; i < rows; ++i) {
+        for (int j = 0; j < columns; ++j) {
+            file >> arr[i][j];
+        }
+    }
+
+    // Close the file
+    file.close();
+
+    return arr;
+}
+
+vector<int> load_fc_bias()
+{
+    ifstream file("test/model_params/fc_bias.txt");
+    if (!file.is_open()) {
+        cerr << "Failed to open the file" << endl;
+    }
+
+    int columns;
+    file >> columns;
+
+    // Create a 1D vector to store the array
+    vector<int> arr(columns);
+
+    // Read the data from the file and store it in the 1D vector
+    for (int j = 0; j < columns; ++j) {
+        file >> arr[j];
+    }
+
+    // Close the file
+    file.close();
+
+    return arr;
+}
+
 
 
 int32_t main(int32_t argc, char **argv) {
@@ -743,64 +939,113 @@ int32_t main(int32_t argc, char **argv) {
 
     }
 
+    auto test_images = load_test_data();
+    auto test_labels = load_test_labels();
+
+    cout << "Data loaded." << endl;
+
+    auto cnn_kernel = load_cnn_weight();
+    auto cnn_bias = load_cnn_bias();
+    auto fc_weight = load_fc_weight();
+    auto fc_weightT = transpose_matrix(fc_weight);
+    auto fc_bias = load_fc_bias();
+
+    cout << "Params loaded." << endl;
 
     auto zero = new_MKLweSample_array(WIDTH, LWEparams, MKparams);
     IntAsymEncrypt(zero, 0, crs_a, PublicKey[0]);
     genExtCipherArr(zero, zero, 0, PublicKey);
 
-    vector<vector<MKLweSample*>> inputImg(INPUT_WIDTH, vector<MKLweSample*>(INPUT_HEIGHT, zero));
-    vector<vector<MKLweSample*>> kernel(kernel_size, vector<MKLweSample*>(kernel_size, zero));
-
-    for (int i=0; i < INPUT_WIDTH; i++)
+    vector<vector<MKLweSample*>> enc_image(INPUT_HEIGHT, vector<MKLweSample*>(INPUT_WIDTH));
+    
+    cout << "\nEncrypting input images . . . " << endl;
+    for (int i=0; i < INPUT_HEIGHT; i++)
     {
-        for (int j=0; j < INPUT_HEIGHT; j++)
+        for (int j=0; j < INPUT_WIDTH; j++)
         {
-            int randVal = rand() % 255;
-            auto randEnc = new_MKLweSample_array(WIDTH, LWEparams, MKparams);
-            IntAsymEncrypt(randEnc, randVal, crs_a, PublicKey[0]);
-            genExtCipherArr(randEnc, randEnc, 0, PublicKey);
-            inputImg[i][j] = randEnc;
+            int img_val = test_images[0][i][j];
+            auto enc_img_val = new_MKLweSample_array(WIDTH, LWEparams, MKparams);
+            IntAsymEncrypt(enc_img_val, img_val, crs_a, PublicKey[0]);
+            genExtCipherArr(enc_img_val, enc_img_val, 0, PublicKey);
+            enc_image[i][j] = enc_img_val;
+        }
+    }
+    cout << "Input images encryption done." << endl;
+
+
+    cout << "\nEncrypting CNN model . . . " << endl;
+    vector<vector<vector<MKLweSample*>>> enc_cnn_kernel(NUM_FILTERS, vector<vector<MKLweSample*>>(FILTER_SIZE, vector<MKLweSample*>(FILTER_SIZE)));
+
+    for (int d = 0; d < NUM_FILTERS; d++)
+    {
+        for (int i=0; i < FILTER_SIZE; i++)
+        {   
+            for (int j=0; j < FILTER_SIZE; j++)
+            {   
+                int cnn_weight_val = cnn_kernel[d][i][j];
+                auto enc_cnn_weight = new_MKLweSample_array(WIDTH, LWEparams, MKparams);
+                IntAsymEncrypt(enc_cnn_weight, cnn_weight_val, crs_a, PublicKey[1]);
+                genExtCipherArr(enc_cnn_weight, enc_cnn_weight, 1, PublicKey);
+                enc_cnn_kernel[d][i][j] = enc_cnn_weight;
+            }
         }
     }
 
-    for (int i=0; i < kernel_size; i++)
+    vector<MKLweSample*> enc_cnn_bias(NUM_FILTERS);
+
+    for (int d = 0; d < NUM_FILTERS; d++)
+    {
+        int cnn_bias_val = cnn_bias[d];
+        auto enc_cnn_bias_val = new_MKLweSample_array(WIDTH, LWEparams, MKparams);
+        IntAsymEncrypt(enc_cnn_bias_val, cnn_bias_val, crs_a, PublicKey[1]);
+        genExtCipherArr(enc_cnn_bias_val, enc_cnn_bias_val, 1, PublicKey);
+        enc_cnn_bias[d] = enc_cnn_bias_val;
+    }
+
+    vector<vector<MKLweSample*>> enc_fc_weight((int)fc_weight.size(), vector<MKLweSample*>((int)fc_weight[0].size()));
+
+    for (int i=0; i < (int)fc_weight.size(); i++)
     {   
-        for (int j=0; j < kernel_size; j++)
+        for (int j=0; j < (int)fc_weight[0].size(); j++)
         {   
-            int randVal = (5 - rand() % 10);
-            auto randEnc = new_MKLweSample_array(WIDTH, LWEparams, MKparams);
-            IntAsymEncrypt(randEnc, randVal, crs_a, PublicKey[0]);
-            genExtCipherArr(randEnc, randEnc, 0, PublicKey);
-            inputImg[i][j] = randEnc;
-            kernel[i][j] = randEnc;
+            int fc_weight_val = fc_weightT[i][j];
+            auto enc_fc_weight_val = new_MKLweSample_array(WIDTH, LWEparams, MKparams);
+            IntAsymEncrypt(enc_fc_weight_val, fc_weight_val, crs_a, PublicKey[1]);
+            genExtCipherArr(enc_fc_weight_val, enc_fc_weight_val, 1, PublicKey);
+            enc_fc_weight[i][j] = enc_fc_weight_val;
         }
     }
+
+    vector<MKLweSample*> enc_fc_bias(NUM_CLASSES);
+
+    for (int d = 0; d < NUM_CLASSES; d++)
+    {
+        int fc_bias_val = fc_bias[d];
+        auto enc_fc_bias_val = new_MKLweSample_array(WIDTH, LWEparams, MKparams);
+        IntAsymEncrypt(enc_fc_bias_val, fc_bias_val, crs_a, PublicKey[1]);
+        genExtCipherArr(enc_fc_bias_val, enc_fc_bias_val, 1, PublicKey);
+        enc_fc_bias[d] = enc_fc_bias_val;
+    }
+    cout << "CNN model encryption done." << endl;
+
 
     time_t start_time = time(NULL);
     printf("Clock starts at: %s", ctime(&start_time));
 
-    cout << "\nPerforming Inference on CNN . . . " << endl;
+    cout << "\nPerforming Inference on Encrypted CNN . . ." << endl;
 
-    auto outputs = convolution(inputImg, kernel, MKlweBK_FFT, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKrlwekey, crs_a, PublicKey, 1);
-    cout << "\nConvolution Layer Done . . ." << endl;
+    auto outputs = enc_conv2d(enc_image, enc_cnn_kernel, enc_cnn_bias, MKlweBK_FFT, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKrlwekey, crs_a, PublicKey, 1, MKlwekey);
+    cout << "\nConvolution Layer Done." << endl;
 
-    outputs = relu(outputs, MKlweBK_FFT, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKrlwekey, crs_a, PublicKey, 1);
-    cout << "\nRelu Activation Done . . ." << endl;
+    outputs = enc_relu(outputs, MKlweBK_FFT, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKrlwekey, crs_a, PublicKey, 1);
+    cout << "\nRelu Activation Done." << endl;
     
-    outputs = max_pooling_2d(outputs, MKlweBK_FFT, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKrlwekey, crs_a, PublicKey, 1);
-    cout << "\nMax-Pooling Done . . ." << endl;
+    outputs = enc_max_pooling2d(outputs, MKlweBK_FFT, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKrlwekey, crs_a, PublicKey, 1);
+    cout << "\nMax-Pooling Done." << endl;
 
-    auto fc_input = flatten(outputs);
+    auto fc_input = enc_flatten(outputs);
 
-    int randVal = (2 - rand() % 4);
-    auto randEnc = new_MKLweSample_array(WIDTH, LWEparams, MKparams);
-    IntAsymEncrypt(randEnc, randVal, crs_a, PublicKey[1]);
-    genExtCipherArr(randEnc, randEnc, 1, PublicKey);
-
-    vector<vector<MKLweSample*>> fc_weight((int)fc_input.size(), vector<MKLweSample*>(NUM_CLASSES, randEnc));
-    vector<MKLweSample*> fc_bias(NUM_CLASSES, randEnc);
-
-    auto fc_output = FC_Layer(fc_input, fc_weight, fc_bias, MKlweBK_FFT, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKrlwekey, crs_a, PublicKey, 1);
+    auto fc_output = enc_fc_layer(fc_input, enc_fc_weight, enc_fc_bias, MKlweBK_FFT, LWEparams, extractedLWEparams, RLWEparams, MKparams, MKrlwekey, crs_a, PublicKey, 1);
     cout << "\nFully-Connected Layer Done . . ." << endl;
 
     time_t end_time = time(NULL);
