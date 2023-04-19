@@ -1,0 +1,88 @@
+┌ Info: wrong_decryption
+│   k = 1
+│   params = Main.TFHE.SchemeParameters(560, 3.05e-5, 1024, 1, true, 3, 9, 3.72e-9, 8, 2, 3.05e-5, 2)
+│   parties = 2
+│   trial = 174
+│   out = true
+│   dec_out = false
+│   encode_message(1, 8) = 536870912
+│   phase = -582599812
+│   noise = -0.26064708922058344
+└ @ Main /Users/as_akin/Documents/EURECOM_internship/MKTHFE/3-gen-mk-tfhe/measurements_1st_method_2.jl:122
+┌ Info: wrong_decryption
+│   k = 1
+│   params = Main.TFHE.SchemeParameters(560, 3.05e-5, 1024, 1, true, 3, 9, 3.72e-9, 8, 2, 3.05e-5, 2)
+│   parties = 2
+│   trial = 411
+│   out = true
+│   dec_out = false
+│   encode_message(1, 8) = 536870912
+│   phase = -659501783
+│   noise = -0.27855222462676466
+└ @ Main /Users/as_akin/Documents/EURECOM_internship/MKTHFE/3-gen-mk-tfhe/measurements_1st_method_2.jl:122
+┌ Info: wrong_decryption
+│   k = 1
+│   params = Main.TFHE.SchemeParameters(560, 3.05e-5, 1024, 1, true, 3, 9, 3.72e-9, 8, 2, 3.05e-5, 2)
+│   parties = 2
+│   trial = 468
+│   out = true
+│   dec_out = false
+│   encode_message(1, 8) = 536870912
+│   phase = -524207497
+│   noise = -0.24705156893469393
+└ @ Main /Users/as_akin/Documents/EURECOM_internship/MKTHFE/3-gen-mk-tfhe/measurements_1st_method_2.jl:122
+┌ Info: wrong_decryption
+│   k = 1
+│   params = Main.TFHE.SchemeParameters(560, 3.05e-5, 1024, 1, true, 3, 9, 3.72e-9, 8, 2, 3.05e-5, 2)
+│   parties = 2
+│   trial = 519
+│   out = true
+│   dec_out = false
+│   encode_message(1, 8) = 536870912
+│   phase = -826047452
+│   noise = -0.317329159937799
+└ @ Main /Users/as_akin/Documents/EURECOM_internship/MKTHFE/3-gen-mk-tfhe/measurements_1st_method_2.jl:122
+┌ Info: wrong_decryption
+│   k = 1
+│   params = Main.TFHE.SchemeParameters(560, 3.05e-5, 1024, 1, true, 3, 9, 3.72e-9, 8, 2, 3.05e-5, 2)
+│   parties = 2
+│   trial = 635
+│   out = true
+│   dec_out = false
+│   encode_message(1, 8) = 536870912
+│   phase = -373406285
+│   noise = -0.21194042568095028
+└ @ Main /Users/as_akin/Documents/EURECOM_internship/MKTHFE/3-gen-mk-tfhe/measurements_1st_method_2.jl:122
+┌ Info: wrong_decryption
+│   k = 1
+│   params = Main.TFHE.SchemeParameters(560, 3.05e-5, 1024, 1, true, 3, 9, 3.72e-9, 8, 2, 3.05e-5, 2)
+│   parties = 2
+│   trial = 790
+│   out = true
+│   dec_out = false
+│   encode_message(1, 8) = 536870912
+│   phase = -410996554
+│   noise = -0.2206925922073424
+└ @ Main /Users/as_akin/Documents/EURECOM_internship/MKTHFE/3-gen-mk-tfhe/measurements_1st_method_2.jl:122
+┌ Info: wrong_decryption
+│   k = 1
+│   params = Main.TFHE.SchemeParameters(560, 3.05e-5, 1024, 1, true, 3, 9, 3.72e-9, 8, 2, 3.05e-5, 2)
+│   parties = 2
+│   trial = 824
+│   out = true
+│   dec_out = false
+│   encode_message(1, 8) = 536870912
+│   phase = -418147402
+│   noise = -0.22235752874985337
+└ @ Main /Users/as_akin/Documents/EURECOM_internship/MKTHFE/3-gen-mk-tfhe/measurements_1st_method_2.jl:122
+┌ Info: wrong_decryption
+│   k = 1
+│   params = Main.TFHE.SchemeParameters(560, 3.05e-5, 1024, 1, true, 3, 9, 3.72e-9, 8, 2, 3.05e-5, 2)
+│   parties = 2
+│   trial = 986
+│   out = true
+│   dec_out = false
+│   encode_message(1, 8) = 536870912
+│   phase = -743393344
+│   noise = -0.2980847507715225
+└ @ Main /Users/as_akin/Documents/EURECOM_internship/MKTHFE/3-gen-mk-tfhe/measurements_1st_method_2.jl:122
